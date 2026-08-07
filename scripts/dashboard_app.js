@@ -540,6 +540,29 @@ function tabelaHistorico(praca) {
     ligação e por lead total.</p>`;
 }
 
+function tabelaCidades(praca) {
+  const geo = D.praças[praca].localizacoes || {};
+  const coluna = (rotulo, cls, linhas) => `
+    <div class="geo-col">
+      <div class="geo-tit"><i class="${cls}"></i>${rotulo}</div>
+      ${linhas && linhas.length
+        ? `<div class="rolagem"><table class="tb tb-geo">
+            <thead><tr><th>Campanha</th><th>Cidades</th></tr></thead>
+            <tbody>${linhas
+              .map((c) => `<tr><td>${esc(c.campanha)}</td>
+                <td class="geo-cid">${(c.cidades || []).map(esc).join(" · ")}</td></tr>`)
+              .join("")}</tbody></table></div>`
+        : '<p class="mut">Nenhuma campanha ativa com segmentação coletada.</p>'}
+    </div>`;
+  return `<div class="grade-geo">
+    ${coluna("Meta Ads", "s-meta", geo.meta)}
+    ${coluna("Google Ads", "s-google", geo.google)}
+  </div>
+  <p class="ht-nota">Somente campanhas com entrega ativa. No Google, "raio" é o círculo de
+  proximidade configurado ao redor da cidade; no Meta, "+raio" amplia o alcance ao redor
+  da cidade indicada.</p>`;
+}
+
 function secResumo(ctx) {
   const { praca, mCamp, mConj, gCamp, gGrupos, resM, resG, serie } = ctx;
   // O mix sai de conjunto/grupo: é ali que o nome cita a especialidade,
@@ -584,6 +607,10 @@ function secResumo(ctx) {
     <div class="bloco">
       <h2>Onde está o resultado<span>e onde o dinheiro está parado</span></h2>
       ${rank}
+    </div>
+    <div class="bloco">
+      <h2>Cidades impactadas<span>segmentação geográfica das campanhas ativas, por plataforma</span></h2>
+      ${tabelaCidades(praca)}
     </div>
     <div class="bloco">
       <h2>Qual ação tomar<span>alertas priorizados por dinheiro em jogo</span></h2>
