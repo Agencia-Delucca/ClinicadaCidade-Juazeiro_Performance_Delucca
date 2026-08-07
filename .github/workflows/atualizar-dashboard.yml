@@ -1,0 +1,99 @@
+name: Atualizar dashboard
+
+on:
+  schedule:
+    # 10:00 UTC = 07:00 no horário de Brasília.
+    # O agendador do GitHub pode atrasar em horários de pico; a segunda
+    # execução às 15:00 UTC (12:00 BRT) serve de rede de segurança.
+    - cron: "0 10 * * *"
+    - cron: "0 15 * * *"
+  workflow_dispatch:
+    inputs:
+      dias:
+        description: "Tamanho da janela de dados, em dias"
+        required: false
+        default: "90"
+
+concurrency:
+  group: dashboard
+  cancel-in-progress: true
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Conferir os secrets da Cloudflare
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CF_TOKEN" ] || [ -z "$CF_ACCOUNT" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN ou CLOUDFLARE_ACCOUNT_ID ausente."
+            exit 1
+          fi
+          echo "Credenciais da Cloudflare presentes."
+
+      - name: Montar .env
+        env:
+          META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
+          META_ACT_JUAZEIRO: ${{ secrets.META_ACT_JUAZEIRO }}
+          GOOGLE_ADS_DEVELOPER_TOKEN: ${{ secrets.GOOGLE_ADS_DEVELOPER_TOKEN }}
+          GOOGLE_ADS_CLIENT_ID: ${{ secrets.GOOGLE_ADS_CLIENT_ID }}
+          GOOGLE_ADS_CLIENT_SECRET: ${{ secrets.GOOGLE_ADS_CLIENT_SECRET }}
+          GOOGLE_ADS_REFRESH_TOKEN: ${{ secrets.GOOGLE_ADS_REFRESH_TOKEN }}
+          GOOGLE_ADS_LOGIN_CUSTOMER_ID: ${{ secrets.GOOGLE_ADS_LOGIN_CUSTOMER_ID }}
+          GOOGLE_CID_JUAZEIRO: ${{ secrets.GOOGLE_CID_JUAZEIRO }}
+        run: |
+          umask 077
+          : > .env
+          for v in META_ACCESS_TOKEN META_ACT_JUAZEIRO \
+                   GOOGLE_ADS_DEVELOPER_TOKEN GOOGLE_ADS_CLIENT_ID \
+                   GOOGLE_ADS_CLIENT_SECRET GOOGLE_ADS_REFRESH_TOKEN \
+                   GOOGLE_ADS_LOGIN_CUSTOMER_ID GOOGLE_CID_JUAZEIRO; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error::Secret $v está vazio."
+              exit 1
+            fi
+            printf '%s=%s\n' "$v" "${!v}" >> .env
+          done
+          echo "Montado .env com $(wc -l < .env) variáveis."
+
+      - name: Coletar dados e gerar o dashboard
+        run: |
+          python scripts/dashboard.py --dias "${{ inputs.dias || '90' }}"
+          echo "--- artefatos gerados ---"
+          ls -lh dados-brutos/dashboard.json dashboard/index.html
+
+      - name: Publicar no Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages deploy dashboard
+            --project-name=cdc-juazeiro-dashboard
+            --branch=main
+            --commit-dirty=true
+
+      - name: Resumo da execução
+        if: always()
+        run: |
+          {
+            echo "### Dashboard"
+            echo ""
+            echo "- Janela de dados: ${{ inputs.dias || '90' }} dias"
+            echo "- Resultado: ${{ job.status }}"
+            echo "- https://cdc-juazeiro-dashboard.pages.dev"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remover credenciais do runner
+        if: always()
+        run: rm -f .env

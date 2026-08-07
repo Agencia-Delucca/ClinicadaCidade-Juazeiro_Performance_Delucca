@@ -1,0 +1,46 @@
+# ============================================
+# CREDENCIAIS - NUNCA COMMITAR
+# ============================================
+.env
+*.env
+!.env.example
+google-ads.yaml
+google_ads.yaml
+*credentials*.json
+*token*.json
+client_secret*.json
+
+# ============================================
+# DADOS BRUTOS - podem conter dado pessoal (LGPD)
+# ============================================
+dados-brutos/
+*.csv
+*.xlsx
+!relatorios/**/*.csv
+
+# ============================================
+# Python
+# ============================================
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# ============================================
+# Sistema / editor
+# ============================================
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Dashboard gerado (contem URLs de CDN que expiram)
+dashboard/
+
+# Cache local do wrangler
+.wrangler/
+
+# Configuracao local do Claude Code
+.claude/

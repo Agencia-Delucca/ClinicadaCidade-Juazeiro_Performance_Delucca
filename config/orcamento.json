@@ -1,0 +1,16 @@
+{
+  "_leia": [
+    "Investimento mensal contratado por praça, em reais.",
+    "O dashboard usa isto para calcular saldo restante e ritmo de gasto.",
+    "Se algum valor for null, o card correspondente mostra 'configurar'.",
+    "'dia_virada' é o dia do mês em que o ciclo de investimento reinicia (1 = todo dia 1º)."
+  ],
+  "dia_virada": 1,
+  "praças": {
+    "juazeiro": {
+      "mensal_total": null,
+      "mensal_meta": null,
+      "mensal_google": null
+    }
+  }
+}
