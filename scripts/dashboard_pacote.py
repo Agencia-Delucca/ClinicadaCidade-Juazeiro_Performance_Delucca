@@ -118,7 +118,7 @@ def montar(bruto):
             "serie": serie,
             "anuncios_texto": v["google"].get("anuncios_texto", []),
             "historico_mensal": historico_mensal(v.get("historico", {})),
-            "localizacoes": v.get("localizacoes", {"meta": [], "google": []}),
+            "geo": v.get("geo", {"meta": [], "google": []}),
         }
 
     return {

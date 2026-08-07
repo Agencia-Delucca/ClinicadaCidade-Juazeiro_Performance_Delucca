@@ -38,50 +38,6 @@ CONVERSA = "onsite_conversion.messaging_conversation_started_7d"
 # Início do histórico mensal da Visão Executiva (campanha a campanha, por mês).
 HIST_DESDE = "2026-01-01"
 
-# Raios de proximidade do Google Ads não têm nome de cidade — só coordenada.
-# De-para levantado por geocodificação reversa em 06/08/2026 (município real
-# de cada ponto configurado nas campanhas). Pontos novos caem no fallback de
-# centro mais próximo (CENTROS_CARIRI).
-PONTOS_PROXIMIDADE = {
-    (-6.9277, -39.5727): "Farias Brito", (-6.9656, -39.5606): "Farias Brito",
-    (-6.9681, -39.5415): "Farias Brito", (-6.9711, -39.5401): "Farias Brito",
-    (-6.9724, -39.5324): "Farias Brito", (-6.9726, -39.5374): "Farias Brito",
-    (-7.0008, -39.5161): "Farias Brito",
-    (-7.0431, -39.2789): "Caririaçu", (-7.0536, -39.2786): "Caririaçu",
-    (-7.0537, -39.4392): "Caririaçu", (-7.0541, -39.2902): "Caririaçu",
-    (-7.0595, -39.2898): "Caririaçu", (-7.061, -39.2744): "Caririaçu",
-    (-7.086, -39.3115): "Caririaçu", (-7.0989, -39.2978): "Caririaçu",
-    (-7.0665, -39.4713): "Crato", (-7.1221, -39.4337): "Crato",
-    (-7.1251, -39.4172): "Crato", (-7.1252, -39.4166): "Crato",
-    (-7.136, -39.4267): "Crato", (-7.1398, -39.3856): "Crato",
-    (-7.2165, -39.398): "Crato", (-7.2273, -39.4027): "Crato",
-    (-7.2625, -39.3622): "Crato",
-    (-7.2492, -39.1509): "Missão Velha", (-7.2763, -39.1714): "Missão Velha",
-    (-7.2777, -39.2138): "Missão Velha", (-7.2806, -39.1968): "Missão Velha",
-    (-7.3011, -39.1556): "Missão Velha", (-7.3319, -39.1907): "Missão Velha",
-    (-7.3646, -39.1631): "Missão Velha", (-7.3949, -39.1317): "Missão Velha",
-    (-7.3963, -39.1117): "Missão Velha", (-7.4111, -39.0876): "Missão Velha",
-    (-7.4151, -39.1178): "Missão Velha", (-7.4382, -39.1082): "Missão Velha",
-    (-7.4422, -39.0932): "Missão Velha",
-    (-7.2822, -39.3378): "Barbalha", (-7.2829, -39.3555): "Barbalha",
-    (-7.2875, -39.2858): "Barbalha", (-7.3008, -39.2736): "Barbalha",
-    (-7.3154, -39.3389): "Barbalha", (-7.329, -39.3767): "Barbalha",
-}
-CENTROS_CARIRI = [
-    ("Juazeiro do Norte", -7.213, -39.315), ("Crato", -7.234, -39.409),
-    ("Barbalha", -7.311, -39.302), ("Missão Velha", -7.249, -39.143),
-    ("Milagres", -7.312, -38.941), ("Brejo Santo", -7.493, -38.987),
-    ("Caririaçu", -6.945, -39.284), ("Farias Brito", -6.926, -39.573),
-    ("Mauriti", -7.389, -38.771), ("Abaiara", -7.346, -39.042),
-    ("Porteiras", -7.535, -39.117), ("Jardim", -7.581, -39.281),
-]
-
-
-def cidade_do_ponto(lat, lng):
-    exato = PONTOS_PROXIMIDADE.get((round(lat, 4), round(lng, 4)))
-    if exato:
-        return exato
-    return min(CENTROS_CARIRI, key=lambda c: (c[1] - lat) ** 2 + (c[2] - lng) ** 2)[0]
 
 PADROES_ACAO = [
     ("ligacao", re.compile(r"call|liga[çc]", re.I)),
@@ -315,53 +271,50 @@ def google_conta(env, token, cid, desde, ate):
     }
 
 
-def google_localizacoes(env, token, cid):
-    """Cidades segmentadas por campanha ativa: alvos diretos (LOCATION) e
-    raios de proximidade (PROXIMITY), só critérios positivos."""
-    q = """
-        SELECT campaign.name, campaign_criterion.type,
-               campaign_criterion.location.geo_target_constant,
-               campaign_criterion.proximity.radius,
-               campaign_criterion.proximity.radius_units,
-               campaign_criterion.proximity.geo_point.latitude_in_micro_degrees,
-               campaign_criterion.proximity.geo_point.longitude_in_micro_degrees
-        FROM campaign_criterion
-        WHERE campaign_criterion.type IN ('LOCATION', 'PROXIMITY')
-          AND campaign_criterion.negative = FALSE
-          AND campaign.status = 'ENABLED'
+def google_geo(env, token, cid, desde, ate):
+    """Entrega REAL por cidade (geographic_view, local de presença da pessoa):
+    série diária [cidade, data, gasto, ligações] para a Visão Executiva."""
+    metricas = "metrics.cost_micros, metrics.phone_calls"
+    q = f"""
+        SELECT segments.geo_target_city, segments.date, {metricas}
+        FROM geographic_view
+        WHERE geographic_view.location_type = 'LOCATION_OF_PRESENCE'
+          AND segments.date BETWEEN '{desde}' AND '{ate}'
     """
-    linhas = google_buscar(env, token, cid, q)
+    try:
+        linhas = google_buscar(env, token, cid, q)
+        tem_ligacao = True
+    except SystemExit:
+        # phone_calls pode não ser selecionável em geographic_view em alguma
+        # versão da API — cai para custo somente, em vez de derrubar a coleta.
+        q = q.replace(metricas, "metrics.cost_micros")
+        linhas = google_buscar(env, token, cid, q)
+        tem_ligacao = False
 
     ids = sorted({
-        l["campaignCriterion"]["location"]["geoTargetConstant"].rsplit("/", 1)[-1]
-        for l in linhas
-        if l["campaignCriterion"].get("location", {}).get("geoTargetConstant")
+        l["segments"]["geoTargetCity"].rsplit("/", 1)[-1]
+        for l in linhas if l["segments"].get("geoTargetCity")
     })
     nomes = {}
-    if ids:
+    for i in range(0, len(ids), 500):
         q2 = ("SELECT geo_target_constant.id, geo_target_constant.name "
-              f"FROM geo_target_constant WHERE geo_target_constant.id IN ({', '.join(ids)})")
+              "FROM geo_target_constant WHERE geo_target_constant.id IN "
+              f"({', '.join(ids[i:i + 500])})")
         for l in google_buscar(env, token, cid, q2):
             g = l["geoTargetConstant"]
             nomes[str(g["id"])] = g.get("name")
 
-    por_camp = {}
+    serie = []
     for l in linhas:
-        crit = l["campaignCriterion"]
-        cidades = por_camp.setdefault(l["campaign"].get("name"), set())
-        if crit.get("location", {}).get("geoTargetConstant"):
-            gid = crit["location"]["geoTargetConstant"].rsplit("/", 1)[-1]
-            cidades.add(nomes.get(gid, f"local {gid}"))
-        elif crit.get("proximity"):
-            p = crit["proximity"]
-            lat = int(p["geoPoint"]["latitudeInMicroDegrees"]) / 1e6
-            lng = int(p["geoPoint"]["longitudeInMicroDegrees"]) / 1e6
-            unid = "km" if p.get("radiusUnits") == "KILOMETERS" else "mi"
-            cidades.add(f"{cidade_do_ponto(lat, lng)} (raio {p.get('radius')} {unid})")
-    return [
-        {"campanha": c, "cidades": sorted(v)}
-        for c, v in sorted(por_camp.items())
-    ]
+        m = l.get("metrics", {})
+        gasto = round(int(m.get("costMicros", 0) or 0) / MICROS, 2)
+        lig = int(m.get("phoneCalls", 0) or 0) if tem_ligacao else 0
+        if gasto <= 0 and lig <= 0:
+            continue
+        gid = (l["segments"].get("geoTargetCity") or "").rsplit("/", 1)[-1]
+        cidade = nomes.get(gid, "Cidade não informada" if not gid else f"local {gid}")
+        serie.append([cidade, l["segments"]["date"], gasto, lig])
+    return serie
 
 
 def google_historico(env, token, cid, desde, ate):
@@ -597,39 +550,33 @@ def meta_conta(act_id, token, desde, ate):
     return {"entidades": list(ents.values()), "serie": serie}
 
 
-def meta_localizacoes(act_id, token):
-    """Cidades segmentadas por campanha com entrega ativa (conjunto ATIVO
-    dentro de campanha ativa), lidas do targeting dos conjuntos."""
-    adsets = meta_paginado(
-        f"act_{act_id}/adsets",
-        {"fields": "name,effective_status,campaign{name},targeting{geo_locations}",
-         "limit": 100},
-        token,
-    )
-    por_camp = {}
-    for a in adsets:
-        if a.get("effective_status") != "ACTIVE":
+def meta_geo(act_id, token, desde, ate):
+    """Entrega REAL por região (a Graph API abre por estado, não por cidade):
+    série diária [região, data, gasto, mensagens]."""
+    linhas = []
+    for f0, f1 in fatias(desde, ate, 30):
+        linhas += meta_paginado(
+            f"act_{act_id}/insights",
+            {
+                "level": "account",
+                "breakdowns": "region",
+                "fields": "spend,actions",
+                "time_range": json.dumps({"since": f0, "until": f1}),
+                "time_increment": 1,
+                "limit": 200,
+            },
+            token,
+        )
+    serie = []
+    for x in linhas:
+        acoes = {a["action_type"]: float(a["value"]) for a in x.get("actions", [])}
+        gasto = round(float(x.get("spend", 0) or 0), 2)
+        msgs = int(acoes.get(CONVERSA, 0))
+        if gasto <= 0 and msgs <= 0:
             continue
-        camp = (a.get("campaign") or {}).get("name") or "—"
-        g = (a.get("targeting") or {}).get("geo_locations") or {}
-        cidades = por_camp.setdefault(camp, set())
-        for c in g.get("cities", []):
-            nome = c.get("name") or "?"
-            if c.get("radius"):
-                km = c["radius"] * 1.609 if c.get("distance_unit") == "mile" else c["radius"]
-                nome += f" (+raio {round(km)} km)"
-            cidades.add(nome)
-        for r in g.get("regions", []):
-            cidades.add(f"Estado: {r.get('name')}")
-        for cl in g.get("custom_locations", []):
-            raio = cl.get("radius") or 0
-            km = round(raio * 1.609) if cl.get("distance_unit") == "mile" else raio
-            rot = cl.get("name") or f"{cl.get('latitude')},{cl.get('longitude')}"
-            cidades.add(f"{rot} (raio {km} km)")
-    return [
-        {"campanha": c, "cidades": sorted(v)}
-        for c, v in sorted(por_camp.items())
-    ]
+        serie.append([x.get("region") or "Região não informada",
+                      x.get("date_start"), gasto, msgs])
+    return serie
 
 
 def meta_historico(act_id, token, desde, ate):
@@ -705,15 +652,15 @@ def main():
         mh = meta_historico(mact, token_m, HIST_DESDE, ate.isoformat())
         print(f"    {len(gh)} linhas Google · {len(mh)} linhas Meta")
 
-        print(f"[{rotulo}] Localizações segmentadas...")
-        gl = google_localizacoes(env, token_g, gcid)
-        ml = meta_localizacoes(mact, token_m)
-        print(f"    {len(gl)} campanhas Google · {len(ml)} campanhas Meta")
+        print(f"[{rotulo}] Entrega por local...")
+        gg = google_geo(env, token_g, gcid, desde.isoformat(), ate.isoformat())
+        mg = meta_geo(mact, token_m, desde.isoformat(), ate.isoformat())
+        print(f"    {len(gg)} linhas Google (cidade) · {len(mg)} linhas Meta (estado)")
 
         saida["praças"][praca] = {
             "rotulo": rotulo, "google": g, "meta": m,
             "historico": {"google": gh, "meta": mh},
-            "localizacoes": {"google": gl, "meta": ml},
+            "geo": {"google": gg, "meta": mg},
         }
 
     SAIDA.mkdir(parents=True, exist_ok=True)

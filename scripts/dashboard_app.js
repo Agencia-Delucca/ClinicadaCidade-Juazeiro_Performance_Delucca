@@ -541,26 +541,49 @@ function tabelaHistorico(praca) {
 }
 
 function tabelaCidades(praca) {
-  const geo = D.praças[praca].localizacoes || {};
-  const coluna = (rotulo, cls, linhas) => `
-    <div class="geo-col">
-      <div class="geo-tit"><i class="${cls}"></i>${rotulo}</div>
-      ${linhas && linhas.length
-        ? `<div class="rolagem"><table class="tb tb-geo">
-            <thead><tr><th>Campanha</th><th>Cidades</th></tr></thead>
-            <tbody>${linhas
-              .map((c) => `<tr><td>${esc(c.campanha)}</td>
-                <td class="geo-cid">${(c.cidades || []).map(esc).join(" · ")}</td></tr>`)
-              .join("")}</tbody></table></div>`
-        : '<p class="mut">Nenhuma campanha ativa com segmentação coletada.</p>'}
+  const geo = D.praças[praca].geo || {};
+  const ini = estado.desde, fim = estado.ate;
+
+  const coluna = (rotulo, sub, cls, serie, unidade) => {
+    const por = new Map();
+    for (const [local, data, gasto, res] of serie || []) {
+      if (data < ini || data > fim) continue;
+      const nome = local.replace(" (state)", "");
+      if (!por.has(nome)) por.set(nome, { gasto: 0, res: 0 });
+      const a = por.get(nome);
+      a.gasto += gasto;
+      a.res += res;
+    }
+    const itens = [...por.entries()]
+      .map(([local, a]) => ({ local, ...a }))
+      .sort((a, b) => b.gasto - a.gasto)
+      .slice(0, 12);
+    const max = itens.length ? itens[0].gasto : 0;
+    // As plataformas nem sempre abrem o RESULTADO por região; só mostra a
+    // linha de resultados quando veio algum número, para não exibir zeros.
+    const temRes = itens.some((c) => c.res > 0);
+
+    const linhas = itens.map((c) => `
+      <div class="gb-linha">
+        <span class="gb-nome" title="${esc(c.local)}">${esc(c.local)}</span>
+        <span class="gb-trilho"><i class="${cls}" style="width:${max ? Math.max((c.gasto / max) * 100, 1.5) : 0}%"></i></span>
+        <span class="gb-val">${brl(c.gasto, 0)}${temRes ? `<em>${nu(c.res)} ${unidade}</em>` : ""}</span>
+      </div>`).join("");
+
+    return `<div class="geo-col">
+      <div class="geo-tit"><i class="${cls}"></i>${rotulo}<span>${esc(sub)}</span></div>
+      ${itens.length ? linhas : '<p class="mut">Sem entrega registrada no período.</p>'}
     </div>`;
+  };
+
   return `<div class="grade-geo">
-    ${coluna("Meta Ads", "s-meta", geo.meta)}
-    ${coluna("Google Ads", "s-google", geo.google)}
+    ${coluna("Meta Ads", "por estado · top 12 por investimento", "s-meta", geo.meta, "msgs")}
+    ${coluna("Google Ads", "por cidade · top 12 por investimento", "s-google", geo.google, "lig.")}
   </div>
-  <p class="ht-nota">Somente campanhas com entrega ativa. No Google, "raio" é o círculo de
-  proximidade configurado ao redor da cidade; no Meta, "+raio" amplia o alcance ao redor
-  da cidade indicada.</p>`;
+  <p class="ht-nota">Local REAL de entrega informado pelas plataformas (onde a pessoa estava
+  ao ver o anúncio), no período selecionado. A Meta reporta por estado; o Google por cidade —
+  e parte do investimento do Google não recebe cidade atribuída, por isso a soma das barras
+  pode ficar abaixo do total investido. Entregas fora do Cariri merecem atenção na segmentação.</p>`;
 }
 
 function secResumo(ctx) {
@@ -609,7 +632,7 @@ function secResumo(ctx) {
       ${rank}
     </div>
     <div class="bloco">
-      <h2>Cidades impactadas<span>segmentação geográfica das campanhas ativas, por plataforma</span></h2>
+      <h2>Regiões impactadas<span>onde os anúncios entregaram de verdade — investimento e resultados por local</span></h2>
       ${tabelaCidades(praca)}
     </div>
     <div class="bloco">

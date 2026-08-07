@@ -672,17 +672,35 @@ details.dobra .rolagem { border: none; border-top: 1px solid var(--grade); borde
 .tb-hist td.ht-b { font-weight: 700; }
 .ht-nota { margin-top: 9px; font-size: 11.5px; opacity: 0.65; line-height: 1.5; }
 
-/* --------------------------- cidades impactadas (Visão executiva) */
+/* --------------------------- regiões impactadas (Visão executiva) */
 .grade-geo { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
 @media (max-width: 980px) { .grade-geo { grid-template-columns: 1fr; } }
+.geo-col {
+  border: 1px solid var(--borda); border-radius: 10px;
+  background: var(--sup); padding: 14px 16px;
+}
 .geo-tit {
   display: flex; align-items: center; gap: 8px;
-  font-size: 13px; font-weight: 700; margin-bottom: 8px;
+  font-size: 13px; font-weight: 700; margin-bottom: 12px;
 }
-.geo-tit i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.geo-tit span { font-weight: 400; font-size: 11px; opacity: 0.65; }
+.geo-tit i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
 .geo-tit i.s-meta { background: var(--meta); }
 .geo-tit i.s-google { background: var(--google); }
-.tb-geo td { white-space: normal; }
-.tb-geo td:first-child { font-weight: 600; min-width: 150px; }
-.tb-geo td.geo-cid { text-align: left; line-height: 1.6; }
-.tb-geo th:last-child { text-align: left; }
+.gb-linha { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.gb-nome {
+  flex: 0 0 128px; font-size: 12px; text-align: right;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.gb-trilho {
+  flex: 1; height: 15px; background: var(--sup2);
+  border-radius: 4px; overflow: hidden;
+}
+.gb-trilho i { display: block; height: 100%; border-radius: 4px; }
+.gb-trilho i.s-meta { background: var(--meta); }
+.gb-trilho i.s-google { background: var(--google); }
+.gb-val {
+  flex: 0 0 108px; font-size: 12px; font-weight: 700;
+  font-variant-numeric: tabular-nums; line-height: 1.25;
+}
+.gb-val em { display: block; font-style: normal; font-weight: 400; font-size: 10.5px; opacity: 0.65; }
