@@ -35,6 +35,9 @@ META_API = "https://graph.facebook.com/v21.0"
 MICROS = 1_000_000
 CONVERSA = "onsite_conversion.messaging_conversation_started_7d"
 
+# Início do histórico mensal da Visão Executiva (campanha a campanha, por mês).
+HIST_DESDE = "2026-01-01"
+
 PADROES_ACAO = [
     ("ligacao", re.compile(r"call|liga[çc]", re.I)),
     ("whatsapp", re.compile(r"whats", re.I)),
@@ -267,6 +270,31 @@ def google_conta(env, token, cid, desde, ate):
     }
 
 
+def google_historico(env, token, cid, desde, ate):
+    """Série MENSAL por campanha, desde o início do ano — alimenta a tabela
+    de histórico da Visão Executiva. Leve: uma linha por campanha por mês."""
+    q = f"""
+        SELECT campaign.name, segments.month,
+               metrics.cost_micros, metrics.clicks, metrics.phone_calls
+        FROM campaign WHERE segments.date BETWEEN '{desde}' AND '{ate}'
+    """
+    linhas = []
+    for l in google_buscar(env, token, cid, q):
+        m = l.get("metrics", {})
+        gasto = round(int(m.get("costMicros", 0) or 0) / MICROS, 2)
+        ligacoes = int(m.get("phoneCalls", 0) or 0)
+        if gasto <= 0 and ligacoes <= 0:
+            continue
+        linhas.append({
+            "campanha": l["campaign"].get("name"),
+            "mes": (l["segments"]["month"] or "")[:7],
+            "gasto": gasto,
+            "cliques": int(m.get("clicks", 0) or 0),
+            "ligacoes": ligacoes,
+        })
+    return linhas
+
+
 # ------------------------------------------------------------------ Meta Ads
 
 
@@ -475,6 +503,37 @@ def meta_conta(act_id, token, desde, ate):
     return {"entidades": list(ents.values()), "serie": serie}
 
 
+def meta_historico(act_id, token, desde, ate):
+    """Série MENSAL por campanha desde o início do ano (nível campanha,
+    time_increment=monthly — uma chamada só, paginada)."""
+    dados = meta_paginado(
+        f"act_{act_id}/insights",
+        {
+            "level": "campaign",
+            "fields": "campaign_name,spend,impressions,actions",
+            "time_range": json.dumps({"since": desde, "until": ate}),
+            "time_increment": "monthly",
+            "limit": 100,
+        },
+        token,
+    )
+    linhas = []
+    for x in dados:
+        acoes = {a["action_type"]: float(a["value"]) for a in x.get("actions", [])}
+        gasto = round(float(x.get("spend", 0) or 0), 2)
+        mensagens = int(acoes.get(CONVERSA, 0))
+        if gasto <= 0 and mensagens <= 0:
+            continue
+        linhas.append({
+            "campanha": x.get("campaign_name"),
+            "mes": (x.get("date_start") or "")[:7],
+            "gasto": gasto,
+            "impressoes": int(x.get("impressions", 0) or 0),
+            "mensagens": mensagens,
+        })
+    return linhas
+
+
 # ---------------------------------------------------------------------- main
 
 
@@ -512,7 +571,15 @@ def main():
         m = meta_conta(mact, token_m, desde.isoformat(), ate.isoformat())
         print(f"    {len(m['entidades'])} entidades · {len(m['serie'])} linhas diárias")
 
-        saida["praças"][praca] = {"rotulo": rotulo, "google": g, "meta": m}
+        print(f"[{rotulo}] Histórico mensal desde {HIST_DESDE}...")
+        gh = google_historico(env, token_g, gcid, HIST_DESDE, ate.isoformat())
+        mh = meta_historico(mact, token_m, HIST_DESDE, ate.isoformat())
+        print(f"    {len(gh)} linhas Google · {len(mh)} linhas Meta")
+
+        saida["praças"][praca] = {
+            "rotulo": rotulo, "google": g, "meta": m,
+            "historico": {"google": gh, "meta": mh},
+        }
 
     SAIDA.mkdir(parents=True, exist_ok=True)
     destino = SAIDA / "dashboard.json"

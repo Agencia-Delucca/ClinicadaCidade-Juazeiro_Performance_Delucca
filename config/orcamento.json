@@ -8,9 +8,9 @@
   "dia_virada": 1,
   "praças": {
     "juazeiro": {
-      "mensal_total": null,
-      "mensal_meta": null,
-      "mensal_google": null
+      "mensal_total": 6000.0,
+      "mensal_meta": 3000.0,
+      "mensal_google": 3000.0
     }
   }
 }

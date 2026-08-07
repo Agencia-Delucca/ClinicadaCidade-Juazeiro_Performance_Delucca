@@ -495,6 +495,51 @@ function barraFiltros(campos) {
   return `<div class="filtros">${campos.join("")}</div>`;
 }
 
+const MES_NOME = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+function tabelaHistorico(praca) {
+  const hist = D.praças[praca].historico_mensal || [];
+  if (!hist.length) return '<p class="mut">Sem histórico coletado ainda.</p>';
+
+  const anoJanela = D.janela[1].slice(0, 4);
+  const mesAtual = D.janela[1].slice(0, 7);
+
+  const linhas = hist.map((h) => {
+    const leads = h.meta_msg + h.goo_lig;
+    const inv = h.meta_gasto + h.goo_gasto;
+    const nome =
+      MES_NOME[parseInt(h.mes.slice(5, 7), 10)] +
+      (h.mes.slice(0, 4) !== anoJanela ? " " + h.mes.slice(0, 4) : "") +
+      (h.mes === mesAtual ? " (parcial)" : "");
+    return `<tr>
+      <td>${esc(nome)}</td>
+      <td>${nu(h.meta_msg)}</td><td>${brl(div(h.meta_gasto, h.meta_msg))}</td>
+      <td>${brl(h.meta_gasto)}</td><td>${nu(h.meta_imp)}</td>
+      <td>${nu(h.goo_lig)}</td><td>${brl(div(h.goo_gasto, h.goo_lig))}</td>
+      <td>${brl(h.goo_gasto)}</td><td>${nu(h.goo_cliques)}</td>
+      <td>${brl(div(h.goo_gasto, h.goo_cliques))}</td>
+      <td class="ht-b">${nu(leads)}</td><td class="ht-b">${brl(div(inv, leads))}</td>
+      <td class="ht-b">${brl(inv)}</td></tr>`;
+  }).join("");
+
+  return `<div class="rolagem"><table class="tb tb-hist">
+    <thead>
+      <tr class="ht-grupos"><th></th>
+        <th colspan="4" class="gh gh-meta">Meta Ads</th>
+        <th colspan="5" class="gh gh-google">Google Ads</th>
+        <th colspan="3" class="gh gh-total">Total</th></tr>
+      <tr><th>Mês</th>
+        <th>Mensagens</th><th>Custo</th><th>Investimento</th><th>Impressões</th>
+        <th>Ligações</th><th>Custo</th><th>Investimento</th><th>Cliques</th><th>CPC</th>
+        <th>Leads</th><th>Custo</th><th>Investimento</th></tr>
+    </thead><tbody>${linhas}</tbody></table></div>
+    <p class="ht-nota">No Meta Ads entram só as campanhas de captação (que geram mensagem) —
+    impulsionamento, tráfego, engajamento, alcance e reconhecimento ficam de fora, inclusive
+    no investimento. No Google Ads entram todas as campanhas. "Custo" é por mensagem, por
+    ligação e por lead total.</p>`;
+}
+
 function secResumo(ctx) {
   const { praca, mCamp, mConj, gCamp, gGrupos, resM, resG, serie } = ctx;
   // O mix sai de conjunto/grupo: é ali que o nome cita a especialidade,
@@ -531,6 +576,10 @@ function secResumo(ctx) {
         ${grafBarras(serie, [["meta_gasto", "Meta Ads", "s-meta"], ["google_gasto", "Google Ads", "s-google"]], "Investimento por dia", "as duas plataformas somadas", "brl")}
         ${grafLinha(serie, "cpl", "Custo por contato, por dia", "investimento total ÷ contatos do dia", (METAS.meta_cpl + METAS.google_cpl) / 2)}
       </div>
+    </div>
+    <div class="bloco">
+      <h2>Histórico mensal<span>mês a mês desde janeiro — independe do filtro de período</span></h2>
+      ${tabelaHistorico(praca)}
     </div>
     <div class="bloco">
       <h2>Onde está o resultado<span>e onde o dinheiro está parado</span></h2>
