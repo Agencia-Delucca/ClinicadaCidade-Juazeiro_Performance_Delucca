@@ -543,8 +543,9 @@ function tabelaHistorico(praca) {
 function tabelaCidades(praca) {
   const geo = D.praças[praca].geo || {};
   const ini = estado.desde, fim = estado.ate;
+  const semAcento = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-  const coluna = (rotulo, sub, cls, serie, unidade) => {
+  const somar = (serie) => {
     const por = new Map();
     for (const [local, data, gasto, res] of serie || []) {
       if (data < ini || data > fim) continue;
@@ -554,36 +555,60 @@ function tabelaCidades(praca) {
       a.gasto += gasto;
       a.res += res;
     }
-    const itens = [...por.entries()]
-      .map(([local, a]) => ({ local, ...a }))
-      .sort((a, b) => b.gasto - a.gasto)
-      .slice(0, 12);
-    const max = itens.length ? itens[0].gasto : 0;
+    return por;
+  };
+
+  const coluna = (rotulo, sub, cls, itens, unidade, extra) => {
+    const max = itens.length ? Math.max(...itens.map((c) => c.gasto)) : 0;
     // As plataformas nem sempre abrem o RESULTADO por região; só mostra a
     // linha de resultados quando veio algum número, para não exibir zeros.
     const temRes = itens.some((c) => c.res > 0);
-
     const linhas = itens.map((c) => `
       <div class="gb-linha">
         <span class="gb-nome" title="${esc(c.local)}">${esc(c.local)}</span>
         <span class="gb-trilho"><i class="${cls}" style="width:${max ? Math.max((c.gasto / max) * 100, 1.5) : 0}%"></i></span>
         <span class="gb-val">${brl(c.gasto, 0)}${temRes ? `<em>${nu(c.res)} ${unidade}</em>` : ""}</span>
       </div>`).join("");
-
     return `<div class="geo-col">
       <div class="geo-tit"><i class="${cls}"></i>${rotulo}<span>${esc(sub)}</span></div>
       ${itens.length ? linhas : '<p class="mut">Sem entrega registrada no período.</p>'}
+      ${extra || ""}
     </div>`;
   };
 
+  // Meta: a Graph API só abre a entrega por ESTADO. Mostra Ceará e consolida
+  // o vazamento numa linha só; as cidades vêm da segmentação ativa.
+  const ce = { local: "Ceará", gasto: 0, res: 0 };
+  const fora = { gasto: 0, res: 0, n: 0 };
+  for (const [nome, a] of somar(geo.meta)) {
+    if (semAcento(nome) === "ceara") {
+      ce.gasto += a.gasto; ce.res += a.res;
+    } else {
+      fora.gasto += a.gasto; fora.res += a.res; fora.n++;
+    }
+  }
+  const metaItens = [];
+  if (ce.gasto > 0 || ce.res > 0) metaItens.push(ce);
+  if (fora.gasto > 0)
+    metaItens.push({ local: "Fora do Ceará", gasto: fora.gasto, res: fora.res });
+  const cidadesMeta = geo.meta_cidades || [];
+  const chips = cidadesMeta.length
+    ? `<div class="geo-cidades"><b>Cidades impactadas no Ceará:</b> ${cidadesMeta.map(esc).join(" · ")}</div>`
+    : "";
+
+  const gooItens = [...somar(geo.google).entries()]
+    .map(([local, a]) => ({ local, ...a }))
+    .sort((a, b) => b.gasto - a.gasto)
+    .slice(0, 12);
+
   return `<div class="grade-geo">
-    ${coluna("Meta Ads", "por estado · top 12 por investimento", "s-meta", geo.meta, "msgs")}
-    ${coluna("Google Ads", "por cidade · top 12 por investimento", "s-google", geo.google, "lig.")}
+    ${coluna("Meta Ads", "entrega por estado + cidades da campanha", "s-meta", metaItens, "msgs", chips)}
+    ${coluna("Google Ads", "por cidade · top 12 por investimento", "s-google", gooItens, "lig.")}
   </div>
-  <p class="ht-nota">Local REAL de entrega informado pelas plataformas (onde a pessoa estava
-  ao ver o anúncio), no período selecionado. A Meta reporta por estado; o Google por cidade —
-  e parte do investimento do Google não recebe cidade atribuída, por isso a soma das barras
-  pode ficar abaixo do total investido. Entregas fora do Cariri merecem atenção na segmentação.</p>`;
+  <p class="ht-nota">Local REAL de entrega no período selecionado. A Meta só reporta a entrega
+  por estado — as cidades listadas são as segmentadas nas campanhas ativas; "Fora do Ceará"
+  soma entregas em outros estados (localização estimada pela Meta). No Google, parte do
+  investimento não recebe cidade atribuída, então a soma das barras pode ficar abaixo do total.</p>`;
 }
 
 function secResumo(ctx) {

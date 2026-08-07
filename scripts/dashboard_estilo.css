@@ -704,3 +704,9 @@ details.dobra .rolagem { border: none; border-top: 1px solid var(--grade); borde
   font-variant-numeric: tabular-nums; line-height: 1.25;
 }
 .gb-val em { display: block; font-style: normal; font-weight: 400; font-size: 10.5px; opacity: 0.65; }
+
+.geo-cidades {
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--grade);
+  font-size: 11.5px; line-height: 1.7; opacity: 0.85;
+}
+.geo-cidades b { font-weight: 700; }

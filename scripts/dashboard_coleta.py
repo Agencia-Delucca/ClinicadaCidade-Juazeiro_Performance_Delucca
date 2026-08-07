@@ -579,6 +579,25 @@ def meta_geo(act_id, token, desde, ate):
     return serie
 
 
+def meta_cidades_alvo(act_id, token):
+    """A Graph API não abre a ENTREGA por cidade — só por estado. Para a tela,
+    lista as cidades segmentadas nos conjuntos com entrega ativa."""
+    adsets = meta_paginado(
+        f"act_{act_id}/adsets",
+        {"fields": "effective_status,targeting{geo_locations}", "limit": 100},
+        token,
+    )
+    cidades = set()
+    for a in adsets:
+        if a.get("effective_status") != "ACTIVE":
+            continue
+        g = (a.get("targeting") or {}).get("geo_locations") or {}
+        for c in g.get("cities", []):
+            if c.get("name"):
+                cidades.add(c["name"])
+    return sorted(cidades)
+
+
 def meta_historico(act_id, token, desde, ate):
     """Série MENSAL por campanha desde o início do ano (nível campanha,
     time_increment=monthly — uma chamada só, paginada)."""
@@ -655,12 +674,14 @@ def main():
         print(f"[{rotulo}] Entrega por local...")
         gg = google_geo(env, token_g, gcid, desde.isoformat(), ate.isoformat())
         mg = meta_geo(mact, token_m, desde.isoformat(), ate.isoformat())
-        print(f"    {len(gg)} linhas Google (cidade) · {len(mg)} linhas Meta (estado)")
+        mc = meta_cidades_alvo(mact, token_m)
+        print(f"    {len(gg)} linhas Google (cidade) · {len(mg)} linhas Meta (estado) "
+              f"· {len(mc)} cidades-alvo Meta")
 
         saida["praças"][praca] = {
             "rotulo": rotulo, "google": g, "meta": m,
             "historico": {"google": gh, "meta": mh},
-            "geo": {"google": gg, "meta": mg},
+            "geo": {"google": gg, "meta": mg, "meta_cidades": mc},
         }
 
     SAIDA.mkdir(parents=True, exist_ok=True)
