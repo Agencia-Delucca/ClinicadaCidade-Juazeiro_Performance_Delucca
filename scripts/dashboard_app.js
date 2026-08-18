@@ -850,12 +850,19 @@ function secCriativos(ctx) {
   const { criativos } = ctx;
   const fE = estado.f.criEsp;
   const fS = estado.f.criStatus;
+  // "Pavoro" é linha de criativo (personagem), não especialidade: casa pelo
+  // nome do anúncio, da campanha ou do conjunto.
+  const ehPavoro = (c) =>
+    /pavor[oô]/i.test(`${c.nome || ""} ${c.campanha || ""} ${c.conjunto || ""}`);
   const lista = criativos.filter(
     (c) =>
-      (!fE || c.especialidade === fE || c.exame === fE) &&
+      (!fE ||
+        (fE === "Pavoro" ? ehPavoro(c) : c.especialidade === fE || c.exame === fE)) &&
       (!fS || c.nivel_dx === fS)
   );
-  const opcEsp = [...new Set(criativos.flatMap((c) => [c.especialidade, c.exame]).filter(Boolean))].sort();
+  const opcEsp = [...new Set(criativos.flatMap((c) => [c.especialidade, c.exame]).filter(Boolean))];
+  if (criativos.some(ehPavoro)) opcEsp.push("Pavoro");
+  opcEsp.sort();
 
   const botao = (v, rot, cls) =>
     `<button class="chip ${cls}${fS === v ? " on" : ""}" data-f="criStatus" data-v="${v}">${rot}</button>`;
