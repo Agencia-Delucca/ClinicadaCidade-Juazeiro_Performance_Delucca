@@ -636,12 +636,17 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--dias", type=int, default=90,
                    help="tamanho da janela de dados disponível na tela")
+    p.add_argument("--incluir-hoje", action="store_true",
+                   help="estende a janela até HOJE (dia parcial — números do dia "
+                        "corrente ainda mudam ao longo das horas). O padrão é até "
+                        "ontem, para o dashboard só mostrar dias fechados.")
     args = p.parse_args()
 
     env = carregar_env()
-    ate = date.today() - timedelta(days=1)
+    ate = date.today() if args.incluir_hoje else date.today() - timedelta(days=1)
     desde = ate - timedelta(days=args.dias - 1)
-    print(f"Janela: {desde} a {ate} ({args.dias} dias)\n")
+    aviso = " — inclui HOJE, dia ainda parcial" if args.incluir_hoje else ""
+    print(f"Janela: {desde} a {ate} ({args.dias} dias){aviso}\n")
 
     token_g = google_token(env)
     token_m = env["META_ACCESS_TOKEN"]
